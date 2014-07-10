@@ -1,4 +1,32 @@
--- Generator for the Dining Philosophers model
+#! /usr/bin/env lua
+
+local cli      = require "cliargs"
+local connect  = require "cosy.connexion.ev"
+local observed = require "cosy.lang.view.observed"
+
+cli:set_name ("philosophers.lua")
+cli:add_option (
+  "-u, --url=<URL>",
+  "editor URL",
+  "ws://localhost:8080"
+)
+cli:add_argument (
+  "resource",
+  "resource to edit"
+)
+cli:add_argument (
+  "token",
+  "user token"
+)
+
+local args = cli:parse_args ()
+if not args then
+  cli:print_help()
+  return
+end
+local url       = args.url
+local token     = args.token
+local resource  = args.resource
 
 -- Load philosophers list:
 local philosophers = {}
@@ -6,7 +34,7 @@ for line in io.lines "philosophers.txt" do
   philosophers [#philosophers + 1] = line
 end
 
-function shuffled (tab)
+local function shuffled (tab)
   local n, order, res = #tab, {}, {}
   for i=1,n do order[i] = { rnd = math.random(), idx = i } end
   table.sort (order, function(a,b) return a.rnd < b.rnd end)
@@ -17,55 +45,62 @@ end
 math.randomseed (os.time ())
 philosophers = shuffled (philosophers)
 
-cosy = {
-  handlers = {}
+local model = connect {
+  editor   = url,
+  resource = resource,
+  token    = token,
 }
 
-cosy.form = {
-  quantity = {
-    type  = "text",
-    name  = "# of dining philosophers?",
-    value = 2,
-    hint  = "a positive integer",
-  },
-  generate = {
-    type = "button",
-    name = "Generate!",
-    clicked   = false,
-    is_active = false,
-  },
-  close = {
-    type = "button",
-    name = "Close",
-    clicked   = false,
-    is_active = true,
+model [cosy.tags.WS] . execute (function ()
+  model.form = {
+    generator = {
+      name = "Generator",
+      type = "form",
+      quantity = {
+        type  = "text",
+        name  = "# of dining philosophers?",
+        value = 2,
+        hint  = "a positive integer",
+      },
+      generate = {
+        type = "button",
+        name = "Generate!",
+        clicked   = false,
+        is_active = false,
+      },
+      close = {
+        type = "button",
+        name = "Close",
+        clicked   = false,
+        is_active = true,
+      },
+    },
   }
-}
 
-local current_number = 0
+  model.think   = {}
+  model.wait    = {}
+  model.eat     = {}
+  model.fork    = {}
+  model.left    = {}
+  model.right   = {}
+  model.release = {}
+  model.arcs    = {}
 
-cosy.model = {}
-cosy.model.think   = {}
-cosy.model.wait    = {}
-cosy.model.eat     = {}
-cosy.model.fork    = {}
-cosy.model.left    = {}
-cosy.model.right   = {}
-cosy.model.release = {}
-cosy.model.arcs    = {}
+  model.number = 0
+end)
 
 local function add ()
-  local think   = cosy.model.think
-  local wait    = cosy.model.wait
-  local eat     = cosy.model.eat
-  local fork    = cosy.model.fork
-  local left    = cosy.model.left
-  local right   = cosy.model.right
-  local release = cosy.model.release
-  local arcs    = cosy.model.arcs
+  local think   = model.think
+  local wait    = model.wait
+  local eat     = model.eat
+  local fork    = model.fork
+  local left    = model.left
+  local right   = model.right
+  local release = model.release
+  local arcs    = model.arcs
   -- Update positions:
-  local angle = 360 / (current_number + 1)
-  for i=1, current_number do
+  local angle = 360 / (model.number + 1)
+  for i=1, model.number do
     think   [i] . position = "4:"   .. tostring (angle * i)
     wait    [i] . position = "2:"   .. tostring (angle * i)
     eat     [i] . position = "1:"   .. tostring (angle * i)
@@ -75,8 +110,8 @@ local function add ()
     release [i] . position = "0.5:" .. tostring (angle * i)
   end
   -- Add new philosopher:
-  current_number = current_number + 1
-  local i = current_number
+  model.number = model.number + 1
+  local i = model.number
   local name = philosophers [i]
   think [i] = {
     type = "place",
@@ -107,9 +142,8 @@ local function add ()
     name = name .. " takes his fork",
     position = "3.5:" .. tostring (angle * i),
   }
-  local previous = i == 1 and current_number or i-1
-  local next     = i == current_number and 1 or i+1
---  print ("current = " .. current_number .. ", i = " .. tostring (i) .. ", previous = " .. tostring (previous) .. ", next = " .. tostring (next))
+  local previous = i == 1 and model.number or i-1
+  local next     = i == model.number and 1 or i+1
   if previous ~= i then
     right [previous] . name = philosophers [previous] .. " takes " .. name .. "'s fork"
   end
@@ -126,16 +160,16 @@ local function add ()
 end
 
 local function remove ()
-  local think   = cosy.model.think
-  local wait    = cosy.model.wait
-  local eat     = cosy.model.eat
-  local fork    = cosy.model.fork
-  local left    = cosy.model.left
-  local right   = cosy.model.right
-  local release = cosy.model.release
-  local arcs    = cosy.model.arcs
+  local think   = model.think
+  local wait    = model.wait
+  local eat     = model.eat
+  local fork    = model.fork
+  local left    = model.left
+  local right   = model.right
+  local release = model.release
+  local arcs    = model.arcs
   -- Remove philosophers
-  local i = current_number
+  local i = model.number
   think   [i] = nil
   wait    [i] = nil
   eat     [i] = nil
@@ -145,14 +179,14 @@ local function remove ()
   release [i] = nil
   arcs    [i] = nil
   if i > 1 then
-    local previous = i == 1 and current_number or i-1
-    local next     = i == current_number and 1 or i+1
+    local previous = i == 1 and model.number or i-1
+    local next     = i == model.number and 1 or i+1
     right [previous] . name = philosophers [previous] .. " takes " .. philosophers [next] .. "'s fork"
   end
   -- Update positions
-  current_number = current_number - 1
-  local angle = 360 / current_number
-  for i=1, current_number - 1 do
+  model.number = model.number - 1
+  local angle = 360 / model.number
+  for i=1, model.number - 1 do
     think   [i] . position = "4:"   .. tostring (angle * i)
     wait    [i] . position = "2:"   .. tostring (angle * i)
     eat     [i] . position = "1:"   .. tostring (angle * i)
@@ -164,22 +198,6 @@ local function remove ()
 end
 
 local function generate ()
-  local n = tonumber (cosy.form.quantity.value)
-  if not n then
-    return
-  end
-  if n < 0 then
-    local delay = 1 / n
-    for i=-1, n, -1 do
-      remove ()
-    end
-  elseif n > 0 then
-    local delay = 1 / n
-    for i=1, n do
-      add ()
-    end
-  end
-
   --[[
   -- arcs:
   for i=1, n do
@@ -234,55 +252,32 @@ local function generate ()
       target = fork [i == 1 and n or i-1],
     }
   end
-  cosy.model = model
+  model = model
   --]]
 end
 
-cosy.handlers.philosophers = function (data, key)
+--[[
+observed [#observed + 1] = function (data, key)
   coroutine.yield ()
-  if data == cosy.form.generate and key == "clicked" then
+  if data == model.form.generator.generate and key == "clicked" then
     generate ()
-    cosy.form.quantity = nil
-    cosy.form.submit   = nil
-    os.exit (0)
-  elseif data == cosy.form.quantity and key == "value" then
+    model.form.generator = nil
+    model [cosy.tags.WS] . stop ()
+  elseif data == model.form.quantity and key == "value" then
     local x = tonumber (x)
-    cosy.form.generate.is_active = x ~= nil
+    model.form.generator.generate.is_active = x ~= nil
                                and math.floor (x) == x
                                and x > 0
                                and x <= #philosophers
   end
 end
-
---[[
-local serpent = require "serpent"
-
-generate ()
-print (serpent.dump (cosy.model, {
-  indent   = '  ',
-  sortkeys = true,
-  comment  = true
-}))
 --]]
 
--- Use copas to do an infinite loop?
-local serpent = require "serpent"
+model [cosy.tags.WS] . execute (function ()
+  for i=1, model.form.generator.quantity.value do
+    add ()
+    coroutine.yield (1)
+  end
+end)
 
-for i=1, cosy.form.quantity.value do
-  add ()
-  print (serpent.dump (cosy, {
-    indent   = '  ',
-    sortkeys = true,
-    comment  = true
-  }))
-end
-
-while true do
-  cosy.form.quantity.value = io.read ("*n")
-  generate ()
-  print (serpent.dump (cosy, {
-    indent   = '  ',
-    sortkeys = true,
-    comment  = true
-  }))
-end
+model [cosy.tags.WS] . loop ()
