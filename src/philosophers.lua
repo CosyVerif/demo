@@ -69,13 +69,13 @@ local function add ()
   print ("Moving existing philosophers.")
   local angle = 360 / (model.number + 1)
   for i=1, model.number do
-    think   [i] . position = "4:"   .. tostring (angle * i)
-    wait    [i] . position = "2:"   .. tostring (angle * i)
-    eat     [i] . position = "1:"   .. tostring (angle * i)
-    fork    [i] . position = "3:"   .. tostring (angle * i + angle / 2)
-    left    [i] . position = "3.5:" .. tostring (angle * i)
-    right   [i] . position = "1.5:" .. tostring (angle * i)
-    release [i] . position = "0.5:" .. tostring (angle * i)
+    think   [i] . position = "40:" .. tostring (angle * i)
+    wait    [i] . position = "20:" .. tostring (angle * i)
+    eat     [i] . position = "10:" .. tostring (angle * i)
+    fork    [i] . position = "30:" .. tostring (angle * i + angle / 2)
+    left    [i] . position = "35:" .. tostring (angle * i)
+    right   [i] . position = "15:" .. tostring (angle * i)
+    release [i] . position = "05:" .. tostring (angle * i)
   end
   -- Add new philosopher:
   model.number = model.number + 1
