@@ -4,6 +4,11 @@ local cli      = require "cliargs"
 local connect  = require "cosy.connexion.ev"
 local observed = require "cosy.lang.view.observed"
 
+local type = require "cosy.util.type"
+local raw  = require "cosy.lang.data" . raw
+local map  = require "cosy.lang.iterators" . map
+local set  = require "cosy.lang.iterators" . set
+
 cli:set_name ("philosophers.lua")
 cli:add_option (
   "-u, --url=<URL>",
@@ -51,7 +56,179 @@ local model = connect {
   token    = token,
 }
 
+local function add ()
+  local think   = model.think
+  local wait    = model.wait
+  local eat     = model.eat
+  local fork    = model.fork
+  local left    = model.left
+  local right   = model.right
+  local release = model.release
+  local arcs    = model.arcs
+  -- Update positions:
+  print ("Moving existing philosophers.")
+  local angle = 360 / (model.number + 1)
+  for i=1, model.number do
+    think   [i] . position = "4:"   .. tostring (angle * i)
+    wait    [i] . position = "2:"   .. tostring (angle * i)
+    eat     [i] . position = "1:"   .. tostring (angle * i)
+    fork    [i] . position = "3:"   .. tostring (angle * i + angle / 2)
+    left    [i] . position = "3.5:" .. tostring (angle * i)
+    right   [i] . position = "1.5:" .. tostring (angle * i)
+    release [i] . position = "0.5:" .. tostring (angle * i)
+  end
+  -- Add new philosopher:
+  model.number = model.number + 1
+  print ("Adding philosopher " .. tostring (model.number))
+  local i = model.number
+  local name = philosophers [i]
+  think [i] = {
+    type = "place",
+    name = name .. " is thinking",
+    marking = true,
+    position = "40:" .. tostring (angle * i),
+  }
+  wait [i] = {
+    type = "place",
+    name = name .. " is waiting",
+    marking = false,
+    position = "20:" .. tostring (angle * i),
+  }
+  eat [i] = {
+    type = "place",
+    name = name .. " is eating",
+    marking = false,
+    position = "10:" .. tostring (angle * i),
+  }
+  fork [i] = {
+    type = "place",
+    name = name .. "'s fork",
+    marking = true,
+    position = "30:" .. tostring (angle * i + angle / 2),
+  }
+  left [i] = {
+    type = "transition",
+    name = name .. " takes his fork",
+    position = "35:" .. tostring (angle * i),
+  }
+  local previous = i == 1 and model.number or i-1
+  local next     = i == model.number and 1 or i+1
+  if previous ~= i then
+    right [previous] . name = philosophers [previous] .. " takes " .. name .. "'s fork"
+  end
+  right [i] = {
+    type = "transition",
+    name = name .. " takes " .. philosophers [next] .. "'s fork",
+    position = "15:" .. tostring (angle * i),
+  }
+  release [i] = {
+    type = "transition",
+    name = name .. " releases forks",
+    position = "05:" .. tostring (angle * i),
+  }
+  arcs [i] = {}
+  arcs [i] . think_left = {
+    type   = "arc",
+    source = think [i],
+    target = left [i],
+  }
+  arcs [i] . fork_left = {
+    type   = "arc",
+    source = fork [i],
+    target = left [i],
+  }
+  arcs [i] . left_wait = {
+    type   = "arc",
+    source = left [i],
+    target = wait [i],
+  }
+  arcs [i] . wait_right = {
+    type   = "arc",
+    source = wait [i],
+    target = right [i],
+  }
+  arcs [i] . right_eat = {
+    type   = "arc",
+    source = right [i],
+    target = eat [i],
+  }
+  arcs [i] . eat_release = {
+    type   = "arc",
+    source = eat [i],
+    target = release [i],
+  }
+  arcs [i] . release_think = {
+    type   = "arc",
+    source = release [i],
+    target = think [i],
+  }
+  arcs [i] . release_fork_1 = {
+    type   = "arc",
+    source = release [i],
+    target = fork [i],
+  }
+  if previous ~= i then
+    if arcs [previous] . fork_right then
+      arcs [previous] . fork_right . source = fork [i]
+    end
+    arcs [i] . fork_right = {
+      type   = "arc",
+      source = fork [next],
+      target = right [i],
+    }
+    if arcs [previous] . release_fork_2 then
+      arcs [previous] . release_fork_2 . target = fork [i]
+    end
+    arcs [i] . release_fork_2 = {
+      type   = "arc",
+      source = release [i],
+      target = fork [next],
+    }
+  end
+end
+
+local function remove ()
+  local think   = model.think
+  local wait    = model.wait
+  local eat     = model.eat
+  local fork    = model.fork
+  local left    = model.left
+  local right   = model.right
+  local release = model.release
+  local arcs    = model.arcs
+  -- Remove philosophers
+  local i = model.number
+  think   [i] = nil
+  wait    [i] = nil
+  eat     [i] = nil
+  fork    [i] = nil
+  left    [i] = nil
+  right   [i] = nil
+  release [i] = nil
+  arcs    [i] = nil
+  if i > 1 then
+    local previous = i == 1 and model.number or i-1
+    local next     = i == model.number and 1 or i+1
+    right [previous] . name = philosophers [previous] .. " takes " .. philosophers [next] .. "'s fork"
+    arcs [previous] . fork_right     . source = fork [next]
+    arcs [previous] . release_fork_2 . target = fork [next]
+  end
+  -- Update positions
+  model.number = model.number - 1
+  local angle = 360 / model.number
+  for i=1, model.number - 1 do
+    think   [i] . position = "40:"   .. tostring (angle * i)
+    wait    [i] . position = "20:"   .. tostring (angle * i)
+    eat     [i] . position = "10:"   .. tostring (angle * i)
+    fork    [i] . position = "30:"   .. tostring (angle * i + angle / 2)
+    left    [i] . position = "35:" .. tostring (angle * i)
+    right   [i] . position = "15:" .. tostring (angle * i)
+    release [i] . position = "05:" .. tostring (angle * i)
+  end
+end
+
 model [cosy.tags.WS] . execute (function ()
+
   model.form = {
     generator = {
       name = "Generator",
@@ -87,197 +264,37 @@ model [cosy.tags.WS] . execute (function ()
   model.arcs    = {}
 
   model.number = 0
-end)
-
-local function add ()
-  local think   = model.think
-  local wait    = model.wait
-  local eat     = model.eat
-  local fork    = model.fork
-  local left    = model.left
-  local right   = model.right
-  local release = model.release
-  local arcs    = model.arcs
-  -- Update positions:
-  local angle = 360 / (model.number + 1)
-  for i=1, model.number do
-    think   [i] . position = "4:"   .. tostring (angle * i)
-    wait    [i] . position = "2:"   .. tostring (angle * i)
-    eat     [i] . position = "1:"   .. tostring (angle * i)
-    fork    [i] . position = "3:"   .. tostring (angle * i + angle / 2)
-    left    [i] . position = "3.5:" .. tostring (angle * i)
-    right   [i] . position = "1.5:" .. tostring (angle * i)
-    release [i] . position = "0.5:" .. tostring (angle * i)
-  end
-  -- Add new philosopher:
-  model.number = model.number + 1
-  local i = model.number
-  local name = philosophers [i]
-  think [i] = {
-    type = "place",
-    name = name .. " is thinking",
-    marking = true,
-    position = "4:" .. tostring (angle * i),
-  }
-  wait [i] = {
-    type = "place",
-    name = name .. " is waiting",
-    marking = false,
-    position = "2:" .. tostring (angle * i),
-  }
-  eat [i] = {
-    type = "place",
-    name = name .. " is eating",
-    marking = false,
-    position = "1:" .. tostring (angle * i),
-  }
-  fork [i] = {
-    type = "place",
-    name = name .. "'s fork",
-    marking = true,
-    position = "3:" .. tostring (angle * i + angle / 2),
-  }
-  left [i] = {
-    type = "transition",
-    name = name .. " takes his fork",
-    position = "3.5:" .. tostring (angle * i),
-  }
-  local previous = i == 1 and model.number or i-1
-  local next     = i == model.number and 1 or i+1
-  if previous ~= i then
-    right [previous] . name = philosophers [previous] .. " takes " .. name .. "'s fork"
-  end
-  right [i] = {
-    type = "transition",
-    name = name .. " takes " .. philosophers [next] .. "'s fork",
-    position = "1.5:" .. tostring (angle * i),
-  }
-  release [i] = {
-    type = "transition",
-    name = name .. " releases forks",
-    position = "0.5:" .. tostring (angle * i),
-  }
-end
-
-local function remove ()
-  local think   = model.think
-  local wait    = model.wait
-  local eat     = model.eat
-  local fork    = model.fork
-  local left    = model.left
-  local right   = model.right
-  local release = model.release
-  local arcs    = model.arcs
-  -- Remove philosophers
-  local i = model.number
-  think   [i] = nil
-  wait    [i] = nil
-  eat     [i] = nil
-  fork    [i] = nil
-  left    [i] = nil
-  right   [i] = nil
-  release [i] = nil
-  arcs    [i] = nil
-  if i > 1 then
-    local previous = i == 1 and model.number or i-1
-    local next     = i == model.number and 1 or i+1
-    right [previous] . name = philosophers [previous] .. " takes " .. philosophers [next] .. "'s fork"
-  end
-  -- Update positions
-  model.number = model.number - 1
-  local angle = 360 / model.number
-  for i=1, model.number - 1 do
-    think   [i] . position = "4:"   .. tostring (angle * i)
-    wait    [i] . position = "2:"   .. tostring (angle * i)
-    eat     [i] . position = "1:"   .. tostring (angle * i)
-    fork    [i] . position = "3:"   .. tostring (angle * i + angle / 2)
-    left    [i] . position = "3.5:" .. tostring (angle * i)
-    right   [i] . position = "1.5:" .. tostring (angle * i)
-    release [i] . position = "0.5:" .. tostring (angle * i)
-  end
-end
-
-local function generate ()
-  --[[
-  -- arcs:
-  for i=1, n do
-    model [#model + 1] = {
-      type   = "arc",
-      source = think [i],
-      target = left [i],
-    }
-    model [#model + 1] = {
-      type   = "arc",
-      source = fork [i],
-      target = left [i],
-    }
-    model [#model + 1] = {
-      type   = "arc",
-      source = left [i],
-      target = wait [i],
-    }
-    model [#model + 1] = {
-      type   = "arc",
-      source = wait [i],
-      target = right [i],
-    }
-    model [#model + 1] = {
-      type   = "arc",
-      source = fork [i == 1 and n or i-1],
-      target = right [i],
-    }
-    model [#model + 1] = {
-      type   = "arc",
-      source = right [i],
-      target = eat [i],
-    }
-    model [#model + 1] = {
-      type   = "arc",
-      source = eat [i],
-      target = release [i],
-    }
-    model [#model + 1] = {
-      type   = "arc",
-      source = release [i],
-      target = think [i],
-    }
-    model [#model +1] = {
-      type   = "arc",
-      source = release [i],
-      target = fork [i],
-    }
-    model [#model +1] = {
-      type   = "arc",
-      source = release [i],
-      target = fork [i == 1 and n or i-1],
-    }
-  end
-  model = model
-  --]]
-end
-
---[[
-observed [#observed + 1] = function (data, key)
-  coroutine.yield ()
-  if data == model.form.generator.generate and key == "clicked" then
-    generate ()
-    model.form.generator = nil
-    model [cosy.tags.WS] . stop ()
-  elseif data == model.form.quantity and key == "value" then
-    local x = tonumber (x)
-    model.form.generator.generate.is_active = x ~= nil
-                               and math.floor (x) == x
-                               and x > 0
-                               and x <= #philosophers
-  end
-end
---]]
-
-model [cosy.tags.WS] . execute (function ()
   for i=1, model.form.generator.quantity.value do
     add ()
     coroutine.yield (1)
   end
+
+  observed [#observed + 1] = function (data, key)
+    coroutine.yield ()
+    if raw (data) == raw (model.form.generator.generate) and key == "clicked" then
+      generate ()
+      model.form.generator = nil
+      model [cosy.tags.WS] . stop ()
+    elseif raw (data) == raw (model.form.generator.quantity) and key == "value" then
+      print ("Quantity updated to " .. tostring (model.form.generator.quantity.value))
+      local x = tonumber (model.form.generator.quantity.value)
+      model [cosy.tags.WS] . execute (function ()
+        if math.floor (x) == x and x > 0 then
+          if x > model.number then
+            for i=model.number+1, x do
+              add ()
+            end
+          elseif x < model.number then
+            for i=model.number-1, x, -1 do
+              remove ()
+            end
+          end
+          model.form.generator.generate.is_active = true
+        end
+      end)
+    end
+  end
+
 end)
 
 model [cosy.tags.WS] . loop ()
