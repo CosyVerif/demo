@@ -27,7 +27,7 @@
         <script type="text/javascript" src="js/d3.min.js"></script>
     </head>
     
-    <body onLoad="init()">
+    <body>
         <div class="container">
             <div class="page-header">
                 <h1>CosyVerif WebClient<small> A graphical representation of Lua Models</small></h1> 
@@ -54,18 +54,9 @@ cosy.resource.nodes[3].position = [[240,190]]</textarea>
             
             <div class="row voffset4">
             </div>
-            
-            <ul id="tabs">
-                <li><a href="#model_gui">Model Graph</a></li>
-                <li><a href="#model_patches">Patches</a></li>
-            </ul>
-            <div class="tabContent" id="model_gui">
+            <div id="model_gui">
                 <h4>Lua Model</h4>
                 <div id="model_container" class="span9"></div>
-            </div>
-            <div class="tabContent" id="model_patches">
-                <h3>Server Patches</h3>
-                <textarea id="server_patches" width="200" height="150"></textarea>
             </div>
         </div> <!-- /container -->
         <script type="text/javascript" src="js/editor.js"></script>
@@ -85,15 +76,8 @@ cosy.resource.nodes[3].position = [[240,190]]</textarea>
             });
             
             
-            lua_input.setSize(null,160);
+            lua_input.setSize(null,100);
 
-            var server_patches = CodeMirror.fromTextArea(document.getElementById('server_patches'),{
-                lineNumbers: true,
-                readOnly: true
-            });
-            
-            server_patches.setValue("local p = { a = {b = 21}, c = {}};");
-            
             // File Reader
             document.getElementById('file_browser').addEventListener('change', CopyMe, false);
             
@@ -101,77 +85,13 @@ cosy.resource.nodes[3].position = [[240,190]]</textarea>
                 var file = evt.target.files[0];
                 if (file) {
                     var reader = new FileReader();
-                    reader.onload = function(){ 
+                    reader.onload = function(){
                         lua_code.setValue(reader.result);
                         executeLua(lua_code.getValue(), false);
                     }
                     reader.readAsText(file);
                 }
             };
-            
-            // Tabs                    
-            var tabLinks = new Array();
-            var contentDivs = new Array();
-            
-            function init() {
-                // Grab the tab links and content divs from the page
-                var tabListItems = document.getElementById('tabs').childNodes;
-                for (var i = 0; i < tabListItems.length; i++) {
-                    if ( tabListItems[i].nodeName == "LI" ) {
-                          var tabLink = getFirstChildWithTagName( tabListItems[i], 'A' );
-                          var id = getHash( tabLink.getAttribute('href') );
-                          tabLinks[id] = tabLink;
-                          contentDivs[id] = document.getElementById( id );
-                        }
-                }
-
-                // Assign onclick events to the tab links, and
-                // highlight the first tab
-                var i = 0;
-                for ( var id in tabLinks ) {
-                    tabLinks[id].onclick = showTab;
-                    tabLinks[id].onfocus = function() { this.blur() };
-                    if ( i == 0 ) tabLinks[id].className = 'selected';
-                    i++;
-                }
-
-                // Hide all content divs except the first
-                var i = 0;
-                for ( var id in contentDivs ) {
-                    if ( i != 0 ) contentDivs[id].className = 'tabContent hide';
-                    i++;
-                }
-            }
-            
-            function showTab() {
-                var selectedId = getHash( this.getAttribute('href') );
-                
-                // Highlight the selected tab, and dim all others.
-                // Also show the selected content div, and hide all others.
-                for ( var id in contentDivs ) {
-                    if ( id == selectedId ) {
-                        tabLinks[id].className = 'selected';
-                        contentDivs[id].className = 'tabContent';
-                    } else {
-                        tabLinks[id].className = '';
-                        contentDivs[id].className = 'tabContent hide';
-                    }
-                }
-                // Stop the browser following the link
-                return false;
-            }
-            
-            function getFirstChildWithTagName( element, tagName ) {
-                for ( var i = 0; i < element.childNodes.length; i++ ) {
-                    if ( element.childNodes[i].nodeName == tagName ) return element.childNodes[i];
-                }
-            }
-            
-            function getHash( url ) {
-                var hashPos = url.lastIndexOf ( '#' );
-                return url.substring( hashPos + 1 );
-            }
-            
             
             // Execution
             var outputElement = document.getElementById('output');
@@ -223,7 +143,7 @@ cosy.resource.nodes[3].position = [[240,190]]</textarea>
             Lua.executeScript("lua/js.lua");
             Lua.executeScript("lua/cosy/interface/js.lua");
         </script>
-    </body>
+    </body> 
 </html>
 
 `
