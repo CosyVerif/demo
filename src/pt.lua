@@ -29,7 +29,7 @@ global.cli:add_option (
 global.cli:add_option (
   "--editor=<URL>",
   "editor URL",
-  "ws://edit.cosyverif.io:6969"
+  "ws://edit.cosyverif.io:8080"
 )
 global.cli:add_flag (
   "-v, --verbose",
@@ -52,9 +52,6 @@ global.meta.servers [""] = {
   username = username,
   password = password,
 }
-
--- POST http://rest.cosyverif.io/users/alban/formalisms/pt
--- { name: "", description: "" }
 
 function main ()
   local url = resource:gsub ("^http://", "http://${username}:${password}@" % {
@@ -79,7 +76,7 @@ function main ()
     Cosy.stop ()
     return
   end
-  
+
   local model = cosy [resource]
 
   model.place_type = {}
