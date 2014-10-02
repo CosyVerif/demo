@@ -4,8 +4,9 @@ local global = _ENV or _G
 global.ev = true
 
 local Cosy      = require "cosy"
+local Helper    = require "cosy.helper"
 local _         = require "cosy.util.string"
-global.cli      = require "cliargs"
+local cli       = require "cliargs"
 local logging   = require "logging"
 logging.console = require "logging.console"
 local logger    = logging.console "%level %message\n"
@@ -13,31 +14,31 @@ local http      = require "socket.http"
 local ltn12     = require "ltn12"
 local json      = require "dkjson"
 
-global.cli:set_name ("pt.lua")
-global.cli:add_argument(
+cli:set_name ("pt.lua")
+cli:add_argument(
   "resource",
   "resource to edit"
 )
-global.cli:add_option (
+cli:add_option (
   "--username=<string>",
   "username"
 )
-global.cli:add_option (
+cli:add_option (
   "--password=<string>",
   "password"
 )
-global.cli:add_option (
+cli:add_option (
   "--editor=<URL>",
   "editor URL",
   "ws://edit.cosyverif.io:8080"
 )
-global.cli:add_flag (
+cli:add_flag (
   "-v, --verbose",
   "enable verbose mode"
 )
-local args = global.cli:parse_args ()
+local args = cli:parse_args ()
 if not args then
-  global.cli:print_help()
+  cli:print_help()
   return
 end
 
@@ -47,13 +48,19 @@ local username     = args.username
 local password     = args.password
 local verbose_mode = args.verbose
 
-global.meta.editor = editor
-global.meta.servers [""] = {
+if verbose_mode then
+  logger:setLevel (logging.DEBUG)
+else
+  logger:setLevel (logging.INFO)
+end
+
+Helper.configure_editor (editor)
+Helper.configure_server ("", {
   username = username,
   password = password,
-}
+})
 
-function main ()
+function Cosy.main ()
   local url = resource:gsub ("^http://", "http://${username}:${password}@" % {
     username = username,
     password = password,
@@ -61,6 +68,9 @@ function main ()
   local data = json.encode ({
     name        = "P/T net",
     description = "Place/Transition Petri nets",
+  })
+  logger:info ("Requesting creation of ${resource}." % {
+    resource = resource
   })
   local _, code = http.request {
     url = url,
@@ -72,12 +82,18 @@ function main ()
     },
   }
   if code ~= 201 then
-    print ("Cannot create formalism, because: " .. tostring (code))
+    logger:error ("Cannot create ${resource}, because ${reason}." % {
+      resource = resource,
+      reason   = code
+    })
     Cosy.stop ()
     return
   end
 
-  local model = cosy [resource]
+  logger:info ("Filling ${resource}." % {
+    resource = resource
+  })
+  local model = Helper.resource (resource)
 
   model.place_type = {}
   model.place_type [tostring (model.place_type)] = true
